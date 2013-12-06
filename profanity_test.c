@@ -4,15 +4,17 @@
 
 #include "profanity.h"
 
-prof_counter E1 = PROF_COUNTER_INIT("events/e1", "things");
-prof_counter E2 = PROF_COUNTER_INIT("events/e2", "things");
+prof_counter E1 = PROF_COUNTER_INIT("events/e1", "things", "counter");
+prof_counter E2 = PROF_COUNTER_INIT("events/e2", "things", "counter");
+prof_counter E3 = PROF_COUNTER_INIT("events/e3", "things", "counter");
+prof_counter C = PROF_COUNTER_INIT("events/C", "things", "state");
 
 int main() {
 
   prof_timer_context ctx = PROF_TIMER_CONTEXT_INIT;
-  prof_counter T1 = PROF_COUNTER_INIT("T1", "cycles");
-  prof_counter T2 = PROF_COUNTER_INIT("T2", "cycles");
-  prof_counter T3 = PROF_COUNTER_INIT("T3", "cycles");
+  prof_counter T1 = PROF_COUNTER_INIT("T1", "cycles", "timer");
+  prof_counter T2 = PROF_COUNTER_INIT("T2", "cycles", "timer");
+  prof_counter T3 = PROF_COUNTER_INIT("T3", "cycles", "timer");
   prof_timer_enter(&ctx, &T1);
   while (1) {
     prof_timer_enter(&ctx, &T2);
@@ -33,6 +35,11 @@ int main() {
     static volatile int x;
     for (x=0; x<1000000; x++);
     prof_timer_exit(&ctx);
+
+    for (int i=0; i<1000000000; i++){
+      E3.update(&E3, 1);
+      C.update(&C, 1000000000 - i);
+    }
   }
   prof_timer_exit(&ctx);
   // exit timer T1

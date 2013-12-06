@@ -17,14 +17,25 @@ struct {
   int ncounters;
 } counter_table = {PTHREAD_MUTEX_INITIALIZER};
 
-static void prof_counter_update(prof_counter* cnt, int64_t value) {
+static void prof_counter_inc(prof_counter* cnt, int64_t value) {
   cnt->events++;
   cnt->sum += value;
 }
 
-static void prof_counter_update_trace(prof_counter* cnt, int64_t value) {
+static void prof_counter_set(prof_counter* cnt, int64_t value) {
+  cnt->events++;
+  cnt->sum = value;
+}
+
+static void prof_counter_inc_trace(prof_counter* cnt, int64_t value) {
   printf("%s: %lld %s\n", cnt->name, value, cnt->unit);
-  prof_counter_update(cnt, value);
+  prof_counter_inc(cnt, value);
+}
+
+
+static void prof_counter_set_trace(prof_counter* cnt, int64_t value) {
+  printf("%s: %lld %s\n", cnt->name, value, cnt->unit);
+  prof_counter_set(cnt, value);
 }
 
 void prof_counter_initialise(prof_counter* cnt, int64_t value) {
@@ -36,10 +47,11 @@ void prof_counter_initialise(prof_counter* cnt, int64_t value) {
       fprintf(stderr, "too many counters!\n");
     }
     char* trace = getenv("PROFANITY_TRACE");
-    if (trace && !strcmp(trace, "1")) {
-      cnt->update = &prof_counter_update_trace;
+    int trace_on = trace && !strcmp(trace, "1");
+    if (!strcmp(cnt->type, "state")) {
+      cnt->update = trace_on ? &prof_counter_set_trace : &prof_counter_set;
     } else {
-      cnt->update = &prof_counter_update;
+      cnt->update = trace_on ? &prof_counter_inc_trace : &prof_counter_inc;
     }
   }
   pthread_mutex_unlock(&counter_table.lock);
@@ -47,18 +59,18 @@ void prof_counter_initialise(prof_counter* cnt, int64_t value) {
   cnt->update(cnt, value);
 }
 
-prof_counter overflow_timer = PROF_COUNTER_INIT("internal/timer_stack_overflow", "cycles");
-prof_counter default_timer = PROF_COUNTER_INIT("internal/timer_default", "cycles");
+prof_counter overflow_timer = PROF_COUNTER_INIT("internal/timer_stack_overflow", "cycles", "timer");
+prof_counter default_timer = PROF_COUNTER_INIT("internal/timer_default", "cycles", "timer");
 
 prof_timer_context overhead_context = PROF_TIMER_CONTEXT_INIT;
-prof_counter overhead_timer = PROF_COUNTER_INIT("internal/overhead", "cycles");
+prof_counter stream_timer = PROF_COUNTER_INIT("internal/stream", "cycles", "timer");
+prof_counter sample_timer = PROF_COUNTER_INIT("internal/sample", "cycles", "timer");
 
 
 struct connection {
   struct mg_connection* conn;
   int num_counters_seen;
   int inited;
- 
   struct connection* next;
 };
 pthread_mutex_t conn_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -108,9 +120,18 @@ static int websocket_data_handler(struct mg_connection *conn, int op,
 static char* send_buffer_base = 0;
 static char* send_buffer = 0;
 static int send_buffer_sz = 0;
+static uint64_t* sample_buffer = 0;
+static int sample_buffer_sz = 0;
+static uint64_t last_sample_time = 0;
 
-static void ensure_buffer(int required_sz){
-  required_sz += MAX_HEADER_SIZE;
+static void ensure_buffers(int ncounters){
+  if (sample_buffer_sz < ncounters * 2) {
+    free(sample_buffer);
+    sample_buffer_sz = ncounters * 2;
+    sample_buffer = malloc(sample_buffer_sz * sizeof(uint64_t));
+  }
+
+  int required_sz = ncounters * 50 + MIN_BUFFER_SIZE + MAX_HEADER_SIZE;
   if (send_buffer_sz < required_sz) {
     free(send_buffer_base);
     send_buffer_base = malloc(required_sz);
@@ -156,7 +177,7 @@ static void sample() {
   ncounters = counter_table.ncounters;
   pthread_mutex_unlock(&counter_table.lock);
   
-  ensure_buffer(ncounters * 50 + MIN_BUFFER_SIZE);
+  ensure_buffers(ncounters);
 
   pthread_mutex_lock(&conn_lock);
 
@@ -171,17 +192,29 @@ static void sample() {
     while (c->num_counters_seen < ncounters) {
       prof_counter* ctr = counter_table.counters[c->num_counters_seen++];
       char* p = send_buffer;
-      p += snprintf(p, MIN_BUFFER_SIZE, "A name={{%s}} unit={{%s}}", ctr->name, ctr->unit);
+      p += snprintf(p, MIN_BUFFER_SIZE, "A name={{%s}} unit={{%s}} type={{%s}}", ctr->name, ctr->unit);
       write_buffer(c, p);
     }
   }
 
-  char* p = send_buffer;
-  *p++ = 'D';
+  prof_timer_enter(&overhead_context, &sample_timer);
+  uint64_t sample_time = rdtsc();
   for (int i=0; i<ncounters; i++) {
     prof_counter* ctr = counter_table.counters[i];
-    p += sprintf(p, " %020lld %020lld", ctr->events, ctr->sum);
+    sample_buffer[i * 2] = ctr->events;
+    sample_buffer[i * 2 + 1] = ctr->sum;
   }
+  prof_timer_exit(&overhead_context);
+
+
+  char* p = send_buffer;
+  p += sprintf(p, "D %020llu", sample_time - last_sample_time);
+  for (int i=0; i<ncounters; i++) {
+    p += sprintf(p, " %020lld %020lld", sample_buffer[i*2], sample_buffer[i*2 + 1]);
+  }
+  last_sample_time = sample_time;
+
+
   for (struct connection* c = connections; c; c = c->next) {
     write_buffer(c, p);
   }
@@ -211,10 +244,10 @@ static void sample() {
 static void* server_thread(void* arg) {
   // fixme: proper timing loop needed
   while (1) {
-    prof_timer_enter(&overhead_context, &overhead_timer);
+    prof_timer_enter(&overhead_context, &stream_timer);
     sample();
     prof_timer_exit(&overhead_context);
-    usleep(50000);
+    usleep(100000);
   }
   return 0;
 }

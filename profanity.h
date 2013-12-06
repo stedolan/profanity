@@ -10,6 +10,7 @@ struct prof_counter;
 typedef struct prof_counter {
   const char* name;
   const char* unit;
+  const char* type;
 
   void (*update)(struct prof_counter*, int64_t value);
 
@@ -22,8 +23,8 @@ void prof_counter_initialise(prof_counter* cnt, int64_t value);
 
 
 
-#define PROF_COUNTER_INIT(name, unit) \
-  {name, unit, &prof_counter_initialise, 0, 0}
+#define PROF_COUNTER_INIT(name, unit, type)     \
+  {name, unit, type, &prof_counter_initialise, 0, 0}
 
 
 
