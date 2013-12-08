@@ -9,13 +9,13 @@ for (var i = 0; i < context.size(); i++) {
 }
 
 $(function(){
-    d3.select("#content").selectAll(".axis")
+    d3.select("#axisbox").selectAll(".axis")
         .data(["top", "bottom"])
         .enter().append("div")
         .attr("class", function(d) { return d + " axis"; })
         .each(function(d) { d3.select(this).call(context.axis().ticks(12).orient(d)); });
 
-    d3.select("#content")
+    d3.select("#axisbox")
         .append("div").attr('class','rulebox')
         .append("div").attr("class", "rule")
         .call(context.rule());
@@ -30,7 +30,7 @@ var metrics_list = [];
 $(function(){
     metrics_tree = {
         children: {},
-        node: d3.select('#content')
+        node: null
     };
 });
 
@@ -50,15 +50,17 @@ $(function(){
 });
 
 function new_metric(args) {
+    console.log(args);
     var name = args.name;
     var name_parts = name.trim().split('/');
     if (name_parts.length == 0) return;
     var m = metrics_tree;
     for (var i = 0; i < name_parts.length; i++) {
         if (!m.children[name_parts[i]]) {
-            var node = m.node.append('div').attr('class','metricset');
+            var node = document.createElement('div');
+            document.getElementById('content').insertBefore(node, m.node ? m.node.nextSibling : null);
+            d3.select(node).attr('class','metrics-nodata')
             var name = name_parts[i];
-            node.append('a').attr('class','name').attr('href','#').text(name);
             m.children[name] = {
                 name: name,
                 children: {},
@@ -82,29 +84,62 @@ function new_metric(args) {
     });
     metrics_list.push(m);
 
-    var h = context.horizon();
-    m.node
-        .selectAll('.horizon')
-        .data([mk_cubism_metric(m.name, m.sum)]).enter()
-        .append('div').attr('class','horizon').call(h);
+    var metrics, units;
+    if (m.type == 'state') {
+        metrics = [mk_cubism_metric(m.name, m.sum)]
+        units = [m.unit]
+    } else {
+        metrics=[]; units = [];
+        if (m.unit != 'events') {
+            metrics = [mk_cubism_metric(m.name, m.sum), ];
+            units = [m.type == 'timer' ? 'sec/sec' : (m.unit + '/sec'), 'events/sec']
+        }
+
+        metrics.push(mk_cubism_metric(m.name, m.events));
+        units.push('events/sec');
+    }
+
+    d3.select(m.node).attr('class','metrics');
+    for (var i = 0; i < metrics.length; i++) {
+        d = d3.select(m.node).append('div').attr('class','metric');
+        if (i == 0) {
+            d.append('a').attr('class','name').attr('href','#').text(args.name);
+        } else {
+            d.append('p').attr('class','noname');
+        }
+        d.append('p').attr('class','unit').text(units[i]);
+        d.selectAll('.horizon')
+            .data([metrics[i]]).enter()
+            .append('div').attr('class','horizon')
+            .call(context.horizon());
+    }
 }
 
 function update_metric(m, dcycles, events, sum) {
     var fps = 1000 / context.step();
     var hz = dcycles * fps;
-    log('hz:'+ hz + ',fps:' + fps);
 
-    if (m.events_last != null) {
-        m.events.push(events - m.events_last);
-    }
-    if (m.sum_last != null) {
+    if (m.events_last != null && m.sum_last != null) {
+        var sum_val, ev_val;
+        ev_val = events - m.events_last;
         if (m.type == 'state') {
-            m.sum.push(sum);
-        } else if (m.unit == 'cycles') {
-            
-            m.sum.push(sum - m.sum_last);
+            sum_val = sum;
+        } else {
+            var delta = sum - m.sum_last;
+            if (m.unit == 'cycles') {
+                // delta is in cycles/frame
+                // we want it in sec/sec
+                sum_val = delta * fps / hz;
+            } else {
+                // delta is in events/frame
+                // we want it in events/sec
+                sum_val = delta * fps;
+            }
         }
+        m.events.push(ev_val * fps);
+        m.sum.push(sum_val);
     }
+
     m.events_last = events;
     m.sum_last = sum;
 }
@@ -122,6 +157,7 @@ $(function() {
     };
     websocket.onclose = function(ev) {
         log('DISCONNECTED');
+        context.stop();
     };
     websocket.onmessage = function(ev) {
         if (ev.data[0] == 'S' || ev.data[0] == 'A') {

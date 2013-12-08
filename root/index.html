@@ -39,38 +39,54 @@
   bottom: 0px;
 }
 
-.metricset {
-  padding-left: 10px;
-  min-width: 500px;
+.metrics-nodata {
+  display: none;
+}
+
+.metric {
+  overflow: hidden;
+  margin: 0px;
+  padding: 0px;
+}
+
+.metric .name, .metric .noname, .metric .horizon, .metric .unit {
+  display: inline-block;
+  vertical-align: top;
+}
+
+.metric .unit {
+  width: 80px;
+  text-align: right;
+  font-style: italic;
+  font-size: 10px;
+  line-height: 30px;
+  margin: 0 6px;
+}
+
+.metric .name, .metric .noname {
+  width: 200px;
+  font-size: 12px;
+  text-align: right;
+  line-height: 30px;
+  margin: 0;
+}
+
+#axisbox {
+  padding-left: 292px;
+  width: 500px;
 }
 
 .rulebox {
   position: absolute;
   width: 500px;
   height: 100%;
-  right: 0;
-}
-
-.metricset.collapsed .metricset{
-  display: none;
-}
-
-.axis, .metricset, .rule { 
-   float: right;
-}
-.axis:after, .metricset:after, .rule:after, #content:after {
-  content: ".";
-  visibility: hidden;
-  display: block;
-  height: 0;
-  clear: both;
+  left: 292px;
 }
 
 .horizon {
+  display: inline-block;
   position: relative;
   width: 500px;
-  right: 0px;
-  float: right;
   border-bottom: solid 1px #000;
 }
 
@@ -90,15 +106,6 @@
   display: block;
 }
 
-.metricset {
-  text-align: right;
-}
-.metricset .name {
-  width: 80px;
-  display: inline-block;
-  text-align: left;
-  line-height: 30px;
-}
 
 .horizon .title {
   display: none;
@@ -125,7 +132,9 @@
 <body>
 
 <h3 id="page_title">Metrics</h3>
-<div id="content"></div>
+<div id="content">
+<div id="axisbox"></div>
+</div>
 <div id="output"></div>  
 </body>
 </html>

@@ -66,6 +66,8 @@ prof_timer_context overhead_context = PROF_TIMER_CONTEXT_INIT;
 prof_counter stream_timer = PROF_COUNTER_INIT("internal/stream", "cycles", "timer");
 prof_counter sample_timer = PROF_COUNTER_INIT("internal/sample", "cycles", "timer");
 
+prof_timer_context prof_global_timer_context = PROF_TIMER_CONTEXT_INIT;
+
 
 struct connection {
   struct mg_connection* conn;
@@ -192,7 +194,7 @@ static void sample() {
     while (c->num_counters_seen < ncounters) {
       prof_counter* ctr = counter_table.counters[c->num_counters_seen++];
       char* p = send_buffer;
-      p += snprintf(p, MIN_BUFFER_SIZE, "A name={{%s}} unit={{%s}} type={{%s}}", ctr->name, ctr->unit);
+      p += snprintf(p, MIN_BUFFER_SIZE, "A name={{%s}} unit={{%s}} type={{%s}}", ctr->name, ctr->unit, ctr->type);
       write_buffer(c, p);
     }
   }
@@ -259,7 +261,7 @@ void prof_run_server(void) {
   struct mg_callbacks callbacks = {0};
   const char *options[] = {
     "listening_ports", "8080",
-    "document_root", "/home/stephen/projects/prof/root",
+    "document_root", "/auto/homes/sd601/prof/root",
     NULL
   };
 
