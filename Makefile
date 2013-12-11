@@ -15,7 +15,7 @@ libprofanity.a: mongoose/mongoose.o profanity.o
 # Compile programs using profanity like this:
 
 profanity_test.o: profanity_test.c
-	c99 -c $< -o $@ `./flags c`
+	c99 -c $< -o $@ `./flags cc`
 
 profanity_test: profanity_test.o libprofanity.a
 	c99 $< -o $@ `./flags ld`
