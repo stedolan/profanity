@@ -1,8 +1,21 @@
+all: libprofanity.a
+
 mongoose/mongoose.o: mongoose/mongoose.c
-	cc -c -O2 $^ -o $@ -DNO_SSL_DL -DNO_SSL -DUSE_WEBSOCKET
+	gcc -c -O2 $^ -o $@ -DNO_SSL_DL -DNO_SSL -DUSE_WEBSOCKET
 
-prof.so: server.c override.c mongoose/mongoose.o
-	cc -ggdb $^ -Imongoose -o $@ -pthread -shared -fpic -ldl -Wall
+profanity.o: profanity.c
+	gcc -std=c99 -c $< -o $@ -O -ggdb -Wall
 
-test: test.c
-	cc $^ -o $@
+libprofanity.a: mongoose/mongoose.o profanity.o
+	rm -f $@; ar cr $@ $^; ranlib $@
+
+
+
+
+# Compile programs using profanity like this:
+
+profanity_test.o: profanity_test.c
+	c99 -c $< -o $@ `./flags c`
+
+profanity_test: profanity_test.o libprofanity.a
+	c99 $< -o $@ `./flags ld`

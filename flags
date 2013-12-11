@@ -1,0 +1,9 @@
+#!/bin/sh
+
+cflags="-I$(dirname "$0")"
+ldflags="-L$(dirname "$0") -lprofanity -pthread"
+case $1 in
+cc) echo "$cflags";;
+ld) echo "$ldflags";;
+'') echo "$cflags $ldflags";;
+esac

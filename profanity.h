@@ -3,8 +3,6 @@
 
 #include <stdint.h>
 
-
-
 struct prof_counter;
 
 typedef struct prof_counter {
@@ -20,18 +18,16 @@ typedef struct prof_counter {
 
 
 void prof_counter_initialise(prof_counter* cnt, int64_t value);
-
-
-
 #define PROF_COUNTER_INIT(name, unit, type)     \
   {name, unit, type, &prof_counter_initialise, 0, 0}
+
 
 
 
 #define PROF_TIMER_STACK_SIZE 256
 typedef struct {
   prof_counter* timer_stack[PROF_TIMER_STACK_SIZE];
-  int next_timer;
+  unsigned long next_timer;
 
   uint64_t last_switch;
 } prof_timer_context;
@@ -46,27 +42,26 @@ extern prof_timer_context prof_global_timer_context;
 
 static inline uint64_t rdtsc (void)
                {
-                 unsigned int tickl, tickh;
+                 unsigned long long tickl, tickh;
                  __asm__ __volatile__("rdtsc":"=a"(tickl),"=d"(tickh));
-                 return ((unsigned long long)tickh << 32)|tickl;
+                 return (tickh << 32)|tickl;
                }
 
 static inline void prof_timer_switch(prof_timer_context* ctx, prof_counter* from) {
   uint64_t now = rdtsc();
   uint64_t then = ctx->last_switch;
-  from->update(from, (int64_t)(now - then));
   ctx->last_switch = now;
+  from->update(from, (int64_t)(now - then));
 }
 
 static inline void prof_timer_enter(prof_timer_context* ctx, prof_counter* t) {
-  int next = ctx->next_timer++ & (PROF_TIMER_STACK_SIZE - 1);
-  int prev = (next - 1) & (PROF_TIMER_STACK_SIZE - 1);
-  ctx->timer_stack[next] = t;
-  prof_timer_switch(ctx, ctx->timer_stack[prev]);
+  unsigned long prev = ctx->next_timer++;
+  ctx->timer_stack[prev] = t;
+  prof_timer_switch(ctx, ctx->timer_stack[prev - 1]);
 }
 
 static inline void prof_timer_exit(prof_timer_context* ctx) {
-  int curr = --ctx->next_timer & (PROF_TIMER_STACK_SIZE - 1);
+  unsigned long curr = --ctx->next_timer;
   prof_timer_switch(ctx, ctx->timer_stack[curr]);
 }
 
@@ -81,7 +76,7 @@ static inline void prof_timer_exit(prof_timer_context* ctx) {
   counter.update(&counter, value); \
   } while(0)
 
-#define PROF_TIMER_BEGIN(name) \ 
+#define PROF_TIMER_BEGIN(name) \
 static prof_counter TIMER = PROF_COUNTER_INIT(name, "cycles", "timer"); \
 prof_timer_enter(&prof_global_timer_context, &TIMER)
 

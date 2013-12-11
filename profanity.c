@@ -1,3 +1,4 @@
+#define _BSD_SOURCE /* for usleep */
 #include <unistd.h>
 #include <string.h>
 #include <stdint.h>
@@ -5,6 +6,7 @@
 #include <pthread.h>
 #include <stdlib.h>
 #include <assert.h>
+#include <inttypes.h>
 
 #include "profanity.h"
 #include "mongoose/mongoose.h"
@@ -28,13 +30,13 @@ static void prof_counter_set(prof_counter* cnt, int64_t value) {
 }
 
 static void prof_counter_inc_trace(prof_counter* cnt, int64_t value) {
-  printf("%s: %lld %s\n", cnt->name, value, cnt->unit);
+  printf("%s: %" PRId64 " %s\n", cnt->name, value, cnt->unit);
   prof_counter_inc(cnt, value);
 }
 
 
 static void prof_counter_set_trace(prof_counter* cnt, int64_t value) {
-  printf("%s: %lld %s\n", cnt->name, value, cnt->unit);
+  printf("%s: %" PRId64 " %s\n", cnt->name, value, cnt->unit);
   prof_counter_set(cnt, value);
 }
 
@@ -110,7 +112,7 @@ static int websocket_data_handler(struct mg_connection *conn, int op,
   if (op == 0x8a && data_len == 0) {
     // pong frame, ignore
   } else {
-    printf("got frame: %02x\n", op);
+    fprintf(stderr, "profanity: got frame: %02x\n", op);
   }
   return 1;
 }
@@ -210,9 +212,9 @@ static void sample() {
 
 
   char* p = send_buffer;
-  p += sprintf(p, "D %020llu", sample_time - last_sample_time);
+  p += sprintf(p, "D %" PRIu64, sample_time - last_sample_time);
   for (int i=0; i<ncounters; i++) {
-    p += sprintf(p, " %020lld %020lld", sample_buffer[i*2], sample_buffer[i*2 + 1]);
+    p += sprintf(p, " %" PRId64 " %" PRId64, sample_buffer[i*2], sample_buffer[i*2 + 1]);
   }
   last_sample_time = sample_time;
 
@@ -221,25 +223,6 @@ static void sample() {
     write_buffer(c, p);
   }
 
-  /*
-  
-  int i;
-  //printf("sampling %d sockets\n", nconns);
-
-  for (i = 0; i<nconns; i++) {
-    unsigned char buf[40];
-    struct timeval tv;
-    gettimeofday(&tv, 0);
-    unsigned long long now = 
-      ((unsigned long long)tv.tv_sec) * 1000 + 
-      ((unsigned long long)tv.tv_usec) / 1000;
-    buf[0] = 0x89;
-    buf[1] = 0x00;
-    buf[2] = 0x81;
-    buf[3] = snprintf((char *) buf + 4, sizeof(buf) - 4, "%llu %llu", now, events);
-    mg_write(conns[i], buf, 4 + buf[3]);
-  }
-  */
   pthread_mutex_unlock(&conn_lock);
 }
 
@@ -271,6 +254,6 @@ void prof_run_server(void) {
   ctx = mg_start(&callbacks, NULL, options);
 
   pthread_t th;
-  pthread_create(&th, 0, server_thread, 0);
+  pthread_create(&th, 0, server_thread, ctx);
   pthread_detach(th);
 }
