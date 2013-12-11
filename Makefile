@@ -4,7 +4,7 @@ mongoose/mongoose.o: mongoose/mongoose.c
 	gcc -c -O2 $^ -o $@ -DNO_SSL_DL -DNO_SSL -DUSE_WEBSOCKET
 
 profanity.o: profanity.c
-	gcc -std=c99 -c $< -o $@ -O -ggdb -Wall
+	gcc -std=c99 -c $< -o $@ -O -ggdb -Wall -DPROFANITY_FILE_PATH=\"`pwd`/root\"
 
 libprofanity.a: mongoose/mongoose.o profanity.o
 	rm -f $@; ar cr $@ $^; ranlib $@

@@ -244,7 +244,7 @@ void prof_run_server(void) {
   struct mg_callbacks callbacks = {0};
   const char *options[] = {
     "listening_ports", "8080",
-    "document_root", "/auto/homes/sd601/prof/root",
+    "document_root", PROFANITY_FILE_PATH,
     NULL
   };
 
